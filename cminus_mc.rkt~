@@ -1,4 +1,6 @@
 #lang racket
+;; NOTE: THIS DOES NOT YET HAVE THE FULL C- GRAMMAR!!!!!
+;;       THIS IS AN EVOLUTION OF THE CALCULATOR CODE.
 
 ;; Import the parser and lexer generators.
 (require parser-tools/yacc
@@ -53,14 +55,16 @@
 (define-lex-abbrevs
   (lower-letter (:/ "a" "z"))
   (upper-letter (:/ #\A #\Z))
+  ;; (:/ 0 9) would not work because the lexer does not understand numbers.
+  ;; But (:/ #\0 #\9) is ok.
   (digit (:/ "0" "9")))
 
 (define calcl
   (lexer
    [(eof) 'EOF]
 
-   ["void" 'VOID] ;; Method return type
-   ["main" 'MAIN] ;; main method
+   ["void" 'VOID] ;; prelude to the main method
+   ["main" 'MAIN] ;; main method's name
    ["{" 'OCB] ;; open brace around main
    ["}" 'CCB] ;; close brace aroudn main
    ["int" 'INT] ;; integer variable declaration
@@ -101,10 +105,15 @@
     (exp [(NUM) (let-values ([(lo hi hexLo hexHi) (int->16bit $1)])
                   ;; Assembly Code
                   ;; Push number onto stack
+;                  (printf "LDA #$~a~n" hexHi)
+;                  (printf "PHA~n")
+;                  (printf "LDA #$~a~n" hexLo)
+;                  (printf "PHA~n")
                   (printf "A9 ~a 48 A9 ~a 48 " hexHi hexLo)
                   $1)
                 ]
          [(VOID MAIN OP CP OCB) (begin
+                  ;(display "*=$D000")
                   (display "D000")
                   (newline)
                   -1)] ;; Reutrn to tell us we just saw main
@@ -113,6 +122,14 @@
                   ;; Assembly Code
                   ;; Retrieve variable value from Symbol Table
                   ;; Push value onto Stack
+;                  (printf "LDX #$~a~n" (8bit->hex (symbol->var-lookup $1)))
+;                  (printf "INX~n")
+;                  (printf "INX~n")
+;                  (printf "LDA *$~a,X~n" (8bit->hex VARS))
+;                  (printf "PHA~n")
+;                  (printf "DEX~n")
+;                  (printf "LDA *$~a,X~n" (8bit->hex VARS))
+;                  (printf "PHA~n")
                   (printf "A2 ~a E8 E8 B5 ~a 48 CA B5 ~a 48 " 
                           (8bit->hex (symbol->var-lookup $1))
                           (8bit->hex VARS)
@@ -121,12 +138,26 @@
          [(VAR = exp) (let-values ([(lo hi hexLo hexHi) (int->16bit $3)])
                         ;; Assembly Code
                         ;; Pull right-hand expression off Stack
+;                        (printf "PLA~n")
+;                        (printf "STA *$~a~n" (8bit->hex WORK1LO))
+;                        (printf "PLA~n")
+;                        (printf "STA *$~a~n" (8bit->hex WORK1HI))
                         (printf "68 85 ~a 68 85 ~a " 
                                 (8bit->hex WORK1LO)
                                 (8bit->hex WORK1HI))
                         ;; Lookup variable location in Symbol Table
                         ;; Store expression value in variable
                         ;; Push value onto Stack
+;                        (printf "LDX #$~a~n" (8bit->hex (symbol->var-lookup $1)))
+;                        (printf "INX~n")
+;                        (printf "INX~n")
+;                        (printf "LDA *$~a~n" (8bit->hex WORK1HI))
+;                        (printf "STA *$~a,X~n" (8bit->hex VARS))
+;                        (printf "PHA~n")
+;                        (printf "DEX~n")
+;                        (printf "LDA *$~a~n" (8bit->hex WORK1LO))
+;                        (printf "STA *$~a,X~n" (8bit->hex VARS))
+;                        (printf "PHA~n")
                         (printf "A2 ~a E8 E8 A5 ~a 95 ~a 48 CA A5 ~a 95 ~a 48 " 
                                 (8bit->hex (symbol->var-lookup $1))
                                 (8bit->hex WORK1HI)
@@ -140,14 +171,25 @@
                         ;; Assembly Code
                         ;; Pull Right-hand expression off Stack
                         ;; Store in Addend workspace
+;                        (printf "PLA~n")
+;                        (printf "STA *$~a~n" (8bit->hex MATH2LO))
+;                        (printf "PLA~n")
+;                        (printf "STA *$~a~n" (8bit->hex MATH2HI))
                         (printf "68 85 ~a 68 85 ~a " 
                                 (8bit->hex MATH2LO)
                                 (8bit->hex MATH2HI))
                         ;; Pull Left-hand expression off Stack
+                        ;; Store in Augend workspace
+;                        (printf "PLA~n")
+;                        (printf "STA *$~a~n" (8bit->hex MATH1LO))
+;                        (printf "PLA~n")
+;                        (printf "STA *$~a~n" (8bit->hex MATH1HI))
                         (printf "68 85 ~a 68 85 ~a " 
                                 (8bit->hex MATH1LO)
                                 (8bit->hex MATH1HI))
-                        (printf "20 ~a ~a " hexLo hexHi)
+                        ;; Call ADD subroutine
+;                        (printf "JSR $~a~a~n" hexHi hexLo)
+                        (printf "20 ~a ~a " hexLo hexHi) ;; <==== byte reversal!!!
                         ;; Push sum onto Stack
                         (printf "A5 ~a 48 A5 ~a 48 " 
                                 (8bit->hex MATH3HI)
@@ -158,22 +200,35 @@
                         ;; Assembly Code
                         ;; Pull Right-hand expression off Stack
                         ;; Store in Minuend workspace
+;                        (printf "PLA~n")
                         (printf "68 ")
+;                        (printf "STA *$~a~n" (8bit->hex MATH2LO))
                         (printf "85 ~a " (8bit->hex MATH2LO))
+;                        (printf "PLA~n")
                         (printf "68 ")
+;                        (printf "STA *$~a~n" (8bit->hex MATH2HI))
                         (printf "85 ~a " (8bit->hex MATH2HI))
                         ;; Pull Left-hand expression off Stack
                         ;; Store in Subtrahend workspace
+;                        (printf "PLA~n")
                         (printf "68 ")
+;                        (printf "STA *$~a~n" (8bit->hex MATH1LO))
                         (printf "85 ~a " (8bit->hex MATH1LO))
+;                        (printf "PLA~n")
                         (printf "68 ")
+;                        (printf "STA *$~a~n" (8bit->hex MATH1HI))
                         (printf "85 ~a " (8bit->hex MATH1HI))
                         ;; Call SUBTRACT subroutine
-                        (printf "20 ~a ~a " hexLo hexHi)
+;                        (printf "JSR $~a~a~n" hexHi hexLo)
+                        (printf "20 ~a ~a " hexLo hexHi) ;; <--- byte reversal!!
                         ;; Push difference onto Stack
+;                        (printf "LDA *$~a~n" (8bit->hex MATH3HI))
                         (printf "A5 ~a " (8bit->hex MATH3HI))
+;                        (printf "PHA~n")
                         (printf "48 ")
+;                        (printf "LDA *$~a~n" (8bit->hex MATH3LO))
                         (printf "A5 ~a " (8bit->hex MATH3LO))
+;                        (printf "PHA~n")
                         (printf "48 ")
                         (- $1 $3))
                       ]
@@ -226,6 +281,9 @@
 
 ;; run the calculator on the given input-port       
 (define (calc ip)
+;  (display "*=$D000")
+  ;(display "D000") ;; NOT LITTLE-ENDIAN!!!!!
+  ;(newline)
   (port-count-lines! ip)
   (letrec ((one-line
             (lambda ()
@@ -234,17 +292,26 @@
                  ; (displayln (not (equal? (newline) result)))
                   ;; Assembly Code
                   ;; EOL pull last value off stack and print result
+;                  (printf "PLA~n")
+;                  (printf "STA *$~a~n" (8bit->hex IOINTL))
+;                  (printf "PLA~n")
+;                  (printf "STA *$~a~n" (8bit->hex IOINTH))
+;                  (printf "STA *$~a~n" (8bit->hex IOFROB))
                   (cond [(not (equal? -1 result))
                   (printf "68 85 ~a 68 85 ~a 85 ~a " 
                           (8bit->hex IOINTL) 
                           (8bit->hex IOINTH)
                           (8bit->hex IOFROB))])
                   ;; Scheme result
+                  ;; (printf "~a\n" result)
                   (one-line))))))
     (one-line))
+;  (display "HLT") ;; Hex 02
   (display "02") ;; Hex 02
   (newline)
+;  (display ".end")
   (display "FFFFFF") ;; Hex 02
+;  (newline)
   )
 
 ;; compile to object code
@@ -255,6 +322,6 @@
 )
 
 ;; Some examples
-(calc (open-input-string "void main(){\n int x = 10; int y = 100; x + (y - 20);}"))
+(calc (open-input-string "void main(){\n int a=1; int b=1234; a + (b - 20);}"))
 ;(calc (open-input-string "void main(){\n}"))
 ;(compile-file "input2" "output2")
